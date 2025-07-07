@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADO Work Item Simulator - AWiS </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.2/ace.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .menu-button { transition: all 0.2s ease-in-out; }
+        .menu-button.active { background-color: #2563eb; color: white; }
+        .menu-button:not(.active):hover { background-color: #e2e8f0; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .toast { visibility: hidden; opacity: 0; transition: opacity 0.5s, visibility 0.5s, transform 0.5s; transform: translateY(20px); }
+        .toast.show { visibility: visible; opacity: 1; transform: translateY(0); }
+        .ai-generator-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            background-color: #4f46e5;
+            color: white;
+            font-weight: 600;
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: background-color 0.2s;
+        }
+        .ai-generator-button:hover { background-color: #4338ca; }
+        .ai-generator-button:disabled { background-color: #a5b4fc; cursor: not-allowed; }
+        .loader {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #fff;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .generated-field-container { margin-bottom: 1.5rem; }
+        .generated-field-label { display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 0.5rem; }
+        .generated-field-content { white-space: pre-wrap; background-color: #f9fafb; padding: 0.75rem 1rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem; line-height: 1.5; color: #1f2937; }
+        .sizing-table { width: 100%; margin-top: 0.5rem; border-collapse: collapse; }
+        .sizing-table th, .sizing-table td { border: 1px solid #d1d5db; padding: 0.75rem; text-align: left; font-size: 0.875rem; }
+        .sizing-table th { background-color: #f3f4f6; font-weight: 600; }
+        .sizing-table td.highlight { background-color: #dbeafe; font-weight: 700; }
+        .chat-bubble { padding: 0.75rem 1rem; border-radius: 0.75rem; max-width: 80%; }
+        .chat-bubble-user { background-color: #dbeafe; color: #1e3a8a; align-self: flex-end; }
+        .chat-bubble-ai { background-color: #e5e7eb; color: #1f2937; align-self: flex-start; }
+        #ace-editor { width: 100%; height: 300px; border-radius: 0.5rem; border: 1px solid #d1d5db; }
+        .story-card, .test-case-card { background-color: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.07); }
+        .story-card h4, .test-case-card h4 { font-weight: 600; font-size: 1.125rem; color: #111827; }
+        .story-card p, .test-case-card p { font-size: 0.875rem; color: #4b5563; }
+        .sub-section-title { font-weight: 600; font-size: 0.875rem; color: #374151; margin-top: 1rem; margin-bottom: 0.25rem;}
+        .sub-section-content { white-space: pre-wrap; font-size: 0.875rem; color: #4b5563; padding-left: 1rem; }
+        .test-case-type {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .test-case-type-positive { background-color: #dcfce7; color: #166534; }
+        .test-case-type-negative { background-color: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="app-container" class="flex flex-col md:flex-row h-screen">
+        <main class="flex-1 p-6 md:p-8 lg:p-10 bg-white overflow-y-auto">
+            <header class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">ADO Work Item Simulator</h1>
+                <p class="text-gray-600 mt-2">A smart front-end for Azure DevOps. Select a work item to generate a standardized template, including a specialized generator for SAFe Features.</p>
+            </header>
+            
+            <div id="template-container" class="fade-in">
+                 <div class="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                     <div id="welcome-icon" class="mx-auto h-12 w-12 text-gray-400"></div>
+                     <h3 class="mt-2 text-lg font-medium text-gray-900">Welcome to the Simulator</h3>
+                     <p class="mt-1 text-sm text-gray-500">Select a template from the right to begin.</p>
+                 </div>
+            </div>
+
+            <footer id="action-footer" class="mt-8 pt-6 border-t border-gray-200 hidden">
+                 <div class="flex items-center justify-end space-x-4">
+                     <button id="copy-button" class="flex items-center px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" style="display: none;">
+                         <i data-lucide="copy" class="w-5 h-5 mr-2"></i>
+                         <span id="copy-button-text">Copy Output</span>
+                     </button>
+                     <button id="reset-button" class="flex items-center px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                         <div id="reset-icon" class="w-5 h-5 mr-2"></div>
+                         Reset
+                     </button>
+                 </div>
+            </footer>
+        </main>
+
+        <aside class="w-full md:w-72 bg-[#f8fafc] p-6 border-l border-gray-200 overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Work Items</h2>
+            </div>
+            <nav id="menu-container" class="space-y-2">
+                <!-- Menu buttons will be dynamically inserted here -->
+            </nav>
+        </aside>
+    </div>
+
+    <div id="toast-notification" class="toast fixed bottom-10 right-10 bg-gray-900 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+        <p id="toast-message"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const templateContainer = document.getElementById('template-container');
+            const menuContainer = document.getElementById('menu-container');
+            const actionFooter = document.getElementById('action-footer');
+            const copyButton = document.getElementById('copy-button');
+            const copyButtonText = document.getElementById('copy-button-text');
+            const resetButton = document.getElementById('reset-button');
+            const toastNotification = document.getElementById('toast-notification');
+            const toastMessage = document.getElementById('toast-message');
+
+            let currentActiveTemplate = null;
+            let generatedFeatureData = null;
+            let generatedStoriesData = null;
+            let generatedTestCasesData = null; // New state for test cases
+            let conversationHistory = [];
+            let refinedFeatureIdea = "";
+            let aceEditor = null;
+
+            const templates = {
+                'SAFe Feature': {
+                    title: 'SAFe Feature',
+                    description: 'Define a feature using a guided, conversational process to ensure all SAFe requirements are met.',
+                    icon: 'gem'
+                },
+                'User Story': {
+                    title: 'User Story',
+                    description: 'Describe what a user wants to do, and Copilot will generate a formal User Story and Acceptance Criteria.',
+                    icon: 'user-check',
+                    fields: [
+                        { id: 'initialStoryDetails', label: 'What does the user want to do?', type: 'textarea', placeholder: 'e.g., A site administrator needs to be able to remove inappropriate comments from blog posts to maintain community standards.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'userStory', label: 'User Story Description', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'acceptanceCriteria', label: 'Acceptance Criteria', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 5 },
+                    ]
+                },
+                'BDD': {
+                    title: 'BDD',
+                    description: 'Describe a feature\'s behavior in plain language, and Copilot will generate the Gherkin syntax for you.',
+                    icon: 'file-text',
+                    fields: [
+                        { id: 'scenarioDetails', label: 'Scenario Details', type: 'textarea', placeholder: 'Describe the user interaction and expected outcome. For example: "A user goes to the login page, enters their correct username and password, clicks the login button, and should then be taken to their personal dashboard page."' },
+                        { id: 'gherkin', label: 'Generated Gherkin Scenario', type: 'ace', placeholder: 'Generated Gherkin code will appear here...' }
+                    ]
+                },
+                 'Risk': {
+                    title: 'Risk',
+                    description: 'Describe a potential risk, and Copilot will generate a structured analysis and mitigation plan.',
+                    icon: 'alert-triangle',
+                    fields: [
+                        { id: 'initialRiskDetails', label: 'Provide a brief overview of the risk', type: 'textarea', placeholder: 'e.g., Our third-party payment processing API has been experiencing intermittent downtime, which could affect customer checkouts.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'riskDescription', label: 'Risk Description', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'impact', label: 'Impact', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'mitigationResponsePlan', label: 'Mitigation Response Plan', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 4 },
+                    ]
+                },
+                'Impediment': {
+                    title: 'Impediment',
+                    description: 'Describe a blocker, and Copilot will generate a structured impediment report.',
+                    icon: 'shield-alert',
+                     fields: [
+                        { id: 'initialImpedimentDetails', label: 'Provide a brief overview of the impediment', type: 'textarea', placeholder: 'e.g., The staging environment server is down, which is blocking all QA testing for the current sprint.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'impact', label: 'Impact', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'desiredOutcome', label: 'Desired Outcome', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 2 },
+                    ]
+                },
+                'Spike': {
+                    title: 'Spike',
+                    description: 'Describe a research task, and Copilot will generate a structured spike plan.',
+                    icon: 'flask-conical',
+                    fields: [
+                        { id: 'initialSpikeDetails', label: 'Provide a brief overview of the research needed', type: 'textarea', placeholder: 'e.g., We need to investigate and compare two different charting libraries (D3.js vs. Chart.js) for our new analytics dashboard.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'scenario', label: 'Scenario', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'purpose', label: 'Purpose', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 2 },
+                        { id: 'tasks', label: 'Tasks', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 4 },
+                    ]
+                },
+                 'Decision': {
+                    title: 'Decision',
+                    description: 'Describe a problem or context, and Copilot will generate a structured decision log entry.',
+                    icon: 'gavel',
+                    fields: [
+                        { id: 'initialDecisionDetails', label: 'Provide a brief overview of the decision to be made', type: 'textarea', placeholder: 'e.g., We need to decide whether to build a new internal admin tool from scratch or purchase a third-party solution.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'contextProblem', label: 'Context/Problem', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'currentState', label: 'Current State', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 2 },
+                        { id: 'proposedState', label: 'Proposed State', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'possibleBenefits', label: 'Possible Benefits', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'possibleRisks', label: 'Possible Risks', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                    ]
+                },
+                'Team PI Objective': {
+                    title: 'Team PI Objective',
+                    description: 'Describe a team\'s PI objective, and Copilot will format it correctly.',
+                    icon: 'flag',
+                    fields: [
+                        { id: 'initialTeamPIObjectiveDetails', label: 'Provide a brief overview of the Team PI Objective', type: 'textarea', placeholder: 'e.g., The payments team will upgrade the payment gateway to support international currencies by the end of the PI to enable global sales expansion.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: '[Team Name] will [action verb] [what / summary of features].' },
+                        { id: 'description', label: 'Description', type: 'textarea', placeholder: '[Team Name] will [action verb] [what / summary of features] by [deadline] so that [who / customer / business] will [action verb] [value purpose].', rows: 4 },
+                    ]
+                },
+                'Team Iteration Goal': {
+                    title: 'Team Iteration Goal',
+                    description: 'Describe a team\'s goal for the iteration, and Copilot will structure it.',
+                    icon: 'repeat',
+                    fields: [
+                        { id: 'initialTeamIterationGoalDetails', label: 'Provide a brief overview of the iteration goal', type: 'textarea', placeholder: 'e.g., Complete the user profile page, including the ability to upload a profile picture and update contact information.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'goal', label: 'Goal', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 2 },
+                        { id: 'outcome', label: 'Outcome', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'valueAdded', label: 'Value Added', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 2 },
+                    ]
+                },
+                'Program PI Objective': {
+                    title: 'Program PI Objective',
+                    description: 'Describe a high-level Program Increment objective, and Copilot will generate a structured plan.',
+                    icon: 'network',
+                    fields: [
+                        { id: 'initialProgramPIObjectiveDetails', label: 'Provide a brief overview of the Program PI Objective', type: 'textarea', placeholder: 'e.g., Launch the new mobile application for iOS and Android to capture a new market segment and increase user engagement.' },
+                        { id: 'title', label: 'Title', type: 'text', placeholder: 'Generated title will appear here...' },
+                        { id: 'description', label: 'Description', type: 'textarea', placeholder: 'Generated content will appear here...', rows: 3 },
+                        { id: 'businessValue', label: 'Business Value (1-10)', type: 'number', placeholder: 'Enter a value from 1 to 10' },
+                        { id: 'associatedFeatures', label: 'Associated Features', type: 'textarea', placeholder: 'List the Feature IDs or titles related to this objective.', rows: 4 },
+                    ]
+                }
+            };
+
+
+            function renderStaticIcons() {
+                document.getElementById('welcome-icon').innerHTML = `<i data-lucide="layout-template" class="w-full h-full"></i>`;
+                document.getElementById('reset-icon').innerHTML = `<i data-lucide="rotate-cw" class="w-full h-full"></i>`;
+                lucide.createIcons({
+                    attrs: {
+                        'stroke-width': 1.5,
+                    }
+                });
+            }
+
+            function initApp() {
+                renderStaticIcons();
+                renderMenu();
+            }
+            
+            function renderMenu() {
+                menuContainer.innerHTML = '';
+                Object.keys(templates).forEach(key => {
+                    const template = templates[key];
+                    const button = document.createElement('button');
+                    button.className = 'menu-button w-full text-left px-4 py-3 rounded-lg font-medium text-gray-700 flex items-center';
+                    button.dataset.template = key;
+                    button.innerHTML = `<i data-lucide="${template.icon}" class="w-5 h-5 mr-3"></i><span>${template.title}</span>`;
+                    button.addEventListener('click', () => {
+                        currentActiveTemplate = key;
+                        renderTemplate(key);
+                        document.querySelectorAll('.menu-button').forEach(btn => btn.classList.remove('active'));
+                        button.classList.add('active');
+                    });
+                    menuContainer.appendChild(button);
+                });
+                lucide.createIcons();
+            }
+
+            function renderTemplate(key) {
+                generatedFeatureData = null;
+                generatedStoriesData = null;
+                generatedTestCasesData = null;
+                conversationHistory = [];
+                refinedFeatureIdea = "";
+                actionFooter.classList.remove('hidden');
+                copyButton.style.display = 'flex';
+                copyButtonText.textContent = 'Copy Output';
+
+                if (aceEditor) {
+                    aceEditor.destroy();
+                    aceEditor = null;
+                }
+
+                if (key === 'SAFe Feature') {
+                    startFeatureDefinitionFlow();
+                } else {
+                    renderGenericTemplate(key);
+                }
+            }
+            
+            function startFeatureDefinitionFlow() {
+                copyButton.style.display = 'none';
+                templateContainer.innerHTML = `
+                    <div class="fade-in">
+                        <h2 class="text-2xl font-bold text-gray-900">New SAFe Feature - Step 1: The Idea</h2>
+                        <p class="text-gray-600 mt-1 mb-6">Let's start by defining the feature. Describe your initial idea, the problem it solves, and the expected outcome. Copilot will ask clarifying questions if needed.</p>
+                        <div id="conversation-container" class="space-y-4 h-64 overflow-y-auto p-2 border rounded-md flex items-center justify-center">
+                             <div id="conversation-placeholder" class="text-center text-gray-400">
+                                 <i data-lucide="lightbulb" class="mx-auto h-16 w-16"></i>
+                                 <p class="mt-2 text-sm">Your conversation with Copilot will appear here.</p>
+                             </div>
+                        </div>
+                        <div id="input-container" class="mt-4"></div>
+                    </div>
+                `;
+                lucide.createIcons();
+                renderUserInput(
+                    "What is your feature idea/problem statement?",
+                    "Describe the business or technical problem, the desired outcome, primary users, and the value this feature will bring...",
+                    "Start Refinement",
+                    processInitialIdea
+                );
+            }
+
+            function renderGenericTemplate(key) {
+                const template = templates[key];
+                const initialField = template.fields[0];
+                const generatedFields = template.fields.slice(1);
+                
+                let generatedFieldsHTML = '';
+                generatedFields.forEach(field => {
+                    if (field.type === 'ace') {
+                        generatedFieldsHTML += `<div><label for="${field.id}" class="block text-sm font-medium text-gray-700 mb-1">${field.label}</label><div id="${field.id}" style="width: 100%; height: 300px; border-radius: 0.5rem; border: 1px solid #d1d5db;"></div></div>`;
+                    } else {
+                        const Tag = field.type === 'textarea' ? 'textarea' : 'input';
+                        generatedFieldsHTML += `
+                            <div>
+                                <label for="${field.id}" class="block text-sm font-medium text-gray-700 mb-1">${field.label}</label>
+                                <${Tag} id="${field.id}" type="${field.type}" ${field.rows ? `rows="${field.rows}"` : ''} placeholder="${field.placeholder}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"></${Tag}>
+                            </div>`;
+                    }
+                });
+
+                const buttonText = key === 'BDD' ? 'Generate Gherkin' : 'Generate Details';
+
+                const formHTML = `
+                    <div class="space-y-6">
+                        <div>
+                            <label for="${initialField.id}" class="block text-sm font-medium text-gray-700 mb-1">${initialField.label}</label>
+                            <textarea id="${initialField.id}" rows="4" placeholder="${initialField.placeholder}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"></textarea>
+                            <div class="mt-4 text-right">
+                                <button id="generic-generate-button" class="ai-generator-button">
+                                    <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
+                                    <span>${buttonText}</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="generated-fields-container" class="space-y-6 pt-6 border-t border-dashed" style="display:none;">
+                            ${generatedFieldsHTML}
+                        </div>
+                    </div>
+                `;
+                
+                templateContainer.innerHTML = `
+                    <div class="fade-in">
+                        <h2 class="text-2xl font-bold text-gray-900">${template.title}</h2>
+                        <p class="text-gray-600 mt-1 mb-6">${template.description}</p>
+                        ${formHTML}
+                    </div>`;
+
+                lucide.createIcons();
+                
+                const aceField = template.fields.find(f => f.type === 'ace');
+                if (aceField) {
+                    aceEditor = ace.edit(aceField.id);
+                    aceEditor.setTheme("ace/theme/chrome");
+                    aceEditor.session.setMode("ace/mode/gherkin");
+                    aceEditor.setOptions({ fontSize: "14px", showPrintMargin: false });
+                }
+
+                document.getElementById('generic-generate-button').addEventListener('click', () => handleGenericAiGeneration(key));
+            }
+
+            function renderUserInput(label, placeholder, buttonText, callback) {
+                const inputContainer = document.getElementById('input-container');
+                inputContainer.innerHTML = `
+                    <div>
+                        <label for="user-input" class="block text-sm font-medium text-gray-700">${label}</label>
+                        <textarea id="user-input" rows="5" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="${placeholder}"></textarea>
+                    </div>
+                    <div class="mt-4 text-right">
+                        <button id="submit-input-button" class="ai-generator-button">
+                            ${buttonText}
+                        </button>
+                    </div>
+                `;
+                document.getElementById('submit-input-button').addEventListener('click', () => {
+                    const userInput = document.getElementById('user-input').value;
+                    if (!userInput.trim()) {
+                        showToast('Please provide a response.', 'error');
+                        return;
+                    }
+                    callback(userInput);
+                });
+            }
+            
+            function updateConversationDisplay(role, text) {
+                const conversationContainer = document.getElementById('conversation-container');
+                const placeholder = document.getElementById('conversation-placeholder');
+
+                if (placeholder) {
+                    placeholder.remove();
+                    conversationContainer.classList.remove('flex', 'items-center', 'justify-center');
+                }
+
+                const bubble = document.createElement('div');
+                bubble.classList.add('chat-bubble', role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai');
+                bubble.textContent = text;
+                conversationContainer.appendChild(bubble);
+                conversationContainer.scrollTop = conversationContainer.scrollHeight;
+            }
+
+            async function processInitialIdea(idea) {
+                conversationHistory.push({ role: 'user', text: idea });
+                updateConversationDisplay('user', idea);
+                await askForClarification();
+            }
+
+            async function processClarificationAnswer(answer) {
+                conversationHistory.push({ role: 'user', text: answer });
+                updateConversationDisplay('user', answer);
+                await askForClarification();
+            }
+
+            async function askForClarification() {
+                const inputContainer = document.getElementById('input-container');
+                inputContainer.innerHTML = `<div class="flex justify-start items-center p-4"><span class="loader mr-4"></span><span>Copilot is analyzing your input...</span></div>`;
+
+                const clarificationPrompt = `You are an expert SAFe Product Manager. Analyze the following feature description provided by a user. Your goal is to ensure the idea is clear enough for development.
+                    Conversation so far: ${JSON.stringify(conversationHistory)}.
+                    Based on the conversation, determine if the description is vague or incomplete in any of these key areas:
+                    1. The specific business/technical problem.
+                    2. The desired measurable outcome.
+                    3. The primary users or stakeholders.
+                    4. The business value.
+                    Your response MUST be a JSON object.
+                    - If the idea is clear and sufficient, respond with: {"status": "complete", "summary": "<Create a concise, one-paragraph summary of the refined feature idea based on the entire conversation>"}.
+                    - If the idea is unclear, respond with ONE targeted follow-up question to address the most significant gap: {"status": "clarification_needed", "question": "<Your single, targeted follow-up question>"}.
+                    - If the user is struggling after several questions, you can offer a template: {"status": "clarification_needed", "question": "It seems we're having trouble defining the feature. Would you like to try this template? 'As a [role], I want to [do something], so that [benefit or outcome].'"}.
+                `;
+                
+                const schema = { type: "OBJECT", properties: { status: { type: "STRING" }, question: { type: "STRING" }, summary: { type: "STRING" } }, required: ["status"] };
+
+                try {
+                    const result = await callCopilot(clarificationPrompt, schema);
+                    
+                    if (result.status === 'complete') {
+                        refinedFeatureIdea = result.summary;
+                        updateConversationDisplay('ai', 'Great, the feature idea is clear. Now, let\'s determine the team velocity.');
+                        renderVelocityInput();
+                    } else { // clarification_needed
+                        conversationHistory.push({ role: 'ai', text: result.question });
+                        updateConversationDisplay('ai', result.question);
+                        renderUserInput(result.question, "Provide more details...", "Submit Answer", processClarificationAnswer);
+                    }
+                } catch (error) {
+                    console.error("Clarification Error:", error);
+                    showToast("Error analyzing the feature idea. Please try again.", "error");
+                    startFeatureDefinitionFlow(); // Reset on error
+                }
+            }
+
+            function renderVelocityInput() {
+                const inputContainer = document.getElementById('input-container');
+                inputContainer.innerHTML = `
+                     <div>
+                         <label for="team-velocity" class="block text-sm font-medium text-gray-700">What is the VELOCITY of the team that will deliver this work? (e.g., 20)</label>
+                         <input type="number" id="team-velocity" value="20" class="mt-1 block w-40 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="e.g., 20">
+                </div>
+                    <div class="mt-4 text-right">
+                        <button id="generate-feature-button" class="ai-generator-button">
+                            <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
+                            <span>Generate Full Feature</span>
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                document.getElementById('generate-feature-button').addEventListener('click', () => {
+                    const teamVelocity = document.getElementById('team-velocity').value;
+                    if (!teamVelocity || parseInt(teamVelocity) <= 0) {
+                        showToast('Please enter a valid team velocity.', 'error');
+                        return;
+                    }
+                    handleSafeFeatureGeneration(refinedFeatureIdea, parseInt(teamVelocity));
+                });
+            }
+            
+            async function handleSafeFeatureGeneration(featureIdea, teamVelocity) {
+                templateContainer.innerHTML = `<div class="flex justify-center items-center p-8"><span class="loader mr-4"></span><span>Generating the full SAFe Feature... This may take a moment.</span></div>`;
+                actionFooter.classList.add('hidden');
+
+                const generationPrompt = `
+                    As a seasoned Product Manager, generate a comprehensive SAFe Feature based on the refined idea.
+                    Your output must be a JSON object. Also provide a realistic 'storyPoints' estimation.
+                    REFINED FEATURE IDEA: "${featureIdea}"
+                `;
+                const schema = { type: "OBJECT", properties: { featureTitle: { type: "STRING" }, summary: { type: "STRING" }, featureBenefitHypothesis: { type: "STRING" }, businessValueStrategicAlignment: { type: "STRING" }, userImpact: { type: "STRING" }, assumptionsDependencies: { type: "STRING" }, risksMitigations: { type: "STRING" }, nonFunctionalRequirements: { type: "STRING" }, securityPrivacyConsiderations: { type: "STRING" }, sustainabilityMaintenance: { type: "STRING" }, implementationNotes: { type: "STRING" }, validationTestStrategy: { type: "STRING" }, acceptanceCriteria: { type: "STRING" }, readinessChecklist: { type: "STRING" }, storyPoints: { type: "NUMBER" } }, required: ["featureTitle", "summary", "featureBenefitHypothesis", "businessValueStrategicAlignment", "userImpact", "assumptionsDependencies", "risksMitigations", "nonFunctionalRequirements", "securityPrivacyConsiderations", "sustainabilityMaintenance", "implementationNotes", "validationTestStrategy", "acceptanceCriteria", "readinessChecklist", "storyPoints"] };
+
+                try {
+                    generatedFeatureData = await callCopilot(generationPrompt, schema);
+                    displayGeneratedFeature(generatedFeatureData, teamVelocity);
+                    showToast('Feature generated successfully!', 'success');
+                } catch (error) {
+                    console.error('SAFe Feature Generation Error:', error);
+                    showToast(`Failed to generate feature. Please try again.`, 'error');
+                    renderTemplate(currentActiveTemplate); // Go back to start on error
+                }
+            }
+
+            async function handleGenericAiGeneration(key) {
+                const template = templates[key];
+                const button = document.getElementById('generic-generate-button');
+                const initialField = document.getElementById(template.fields[0].id);
+                const userInput = initialField.value.trim();
+
+                if (!userInput) {
+                    showToast('Please provide an initial overview first.', 'error');
+                    return;
+                }
+
+                button.disabled = true;
+                button.innerHTML = `<span class="loader mr-2"></span><span>Generating...</span>`;
+
+                let prompt, schema, fieldMapping = {};
+                template.fields.slice(1).forEach(f => fieldMapping[f.id] = f.id);
+
+                switch (key) {
+                    case 'User Story':
+                        prompt = `Based on the following user story idea, generate a structured User Story work item. 1. Create a 'title'. 2. Write the 'userStory' description strictly following the format 'As a [user role], I want [activity], so that [business value].' 3. Write a list of 'acceptanceCriteria' as a multi-line string. User Story Idea: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, userStory: { type: "STRING" }, acceptanceCriteria: { type: "STRING" } }, required: ["title", "userStory", "acceptanceCriteria"] };
+                        break;
+                    case 'BDD':
+                        prompt = `Based on the following scenario details, generate a complete Gherkin script. The output must be only the Gherkin code. Infer a suitable title for the "Feature:" and "Scenario:" lines. Scenario Details: "${userInput}"`;
+                        break;
+                    case 'Risk':
+                        prompt = `Based on the following risk overview, elaborate and generate the content for a structured risk analysis. Risk Overview: "${userInput}".`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, riskDescription: { type: "STRING" }, impact: { type: "STRING" }, mitigationResponsePlan: { type: "STRING" } }, required: ["title", "riskDescription", "impact", "mitigationResponsePlan"] };
+                        break;
+                    case 'Impediment':
+                        prompt = `Based on the following impediment overview, generate a structured impediment report. Create a concise title that summarizes the issue. Impediment Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, impact: { type: "STRING" }, desiredOutcome: { type: "STRING" } }, required: ["title", "impact", "desiredOutcome"] };
+                        break;
+                    case 'Spike':
+                        prompt = `Based on the following research overview, generate a structured Spike plan. Create a concise title. Research Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, scenario: { type: "STRING" }, purpose: { type: "STRING" }, tasks: { type: "STRING" } }, required: ["title", "scenario", "purpose", "tasks"] };
+                        break;
+                    case 'Decision':
+                        prompt = `Based on the following decision overview, generate a structured decision log. Create a concise title. Decision Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, contextProblem: { type: "STRING" }, currentState: { type: "STRING" }, proposedState: { type: "STRING" }, possibleBenefits: { type: "STRING" }, possibleRisks: { type: "STRING" } }, required: ["title", "contextProblem", "currentState", "proposedState", "possibleBenefits", "possibleRisks"] };
+                        break;
+                    case 'Team PI Objective':
+                        prompt = `Based on the following overview, generate a structured Team PI Objective. The title must follow the format '[Team Name] will [action verb] [what / summary of features]'. The description must follow the format '[Team Name] will [action verb] [what / summary of features] by [deadline] so that [who / customer / business] will [action verb] [value purpose].' Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, description: { type: "STRING" } }, required: ["title", "description"] };
+                        break;
+                    case 'Team Iteration Goal':
+                        prompt = `Based on the following overview, generate a structured Team Iteration Goal. Create a concise title that summarizes the goal. Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, goal: { type: "STRING" }, outcome: { type: "STRING" }, valueAdded: { type: "STRING" } }, required: ["title", "goal", "outcome", "valueAdded"] };
+                        break;
+                    case 'Program PI Objective':
+                        prompt = `Based on the following overview, generate a structured Program PI Objective. Create a concise title. Describe the business value as a number from 1 to 10. List associated features. Overview: "${userInput}"`;
+                        schema = { type: "OBJECT", properties: { title: { type: "STRING" }, description: { type: "STRING" }, businessValue: { type: "NUMBER" }, associatedFeatures: { type: "STRING" } }, required: ["title", "description", "businessValue", "associatedFeatures"] };
+                        break;
+                }
+
+                try {
+                    let generatedContent;
+                    if (key === 'BDD') {
+                        const resultText = await callCopilot(prompt); 
+                        generatedContent = { gherkin: resultText };
+                    } else {
+                        generatedContent = await callCopilot(prompt, schema);
+                    }
+
+                    document.getElementById('generated-fields-container').style.display = 'block';
+
+                    for (const [genKey, elementId] of Object.entries(fieldMapping)) {
+                        const element = document.getElementById(elementId);
+                        if (element) {
+                             if (elementId === 'gherkin' && aceEditor) {
+                                 aceEditor.setValue(generatedContent[genKey] || '', -1);
+                            } else {
+                                 element.value = generatedContent[genKey] || '';
+                            }
+                        }
+                    }
+                    showToast('Details generated successfully!', 'success');
+                } catch (error) {
+                    console.error(`${key} Generation Error:`, error);
+                    showToast(`Failed to generate details. Please try again.`, 'error');
+                } finally {
+                    button.disabled = false;
+                    const buttonText = key === 'BDD' ? 'Generate Gherkin' : 'Generate Details';
+                    button.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 mr-2"></i><span>${buttonText}</span>`;
+                    lucide.createIcons();
+                }
+            }
+            
+            async function callCopilot(prompt, schema = null) {
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+                if (schema) {
+                    payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
+                }
+                
+                const apiKey = ""; // API key is handled by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error("API Fetch Error Body:", errorBody);
+                    throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+                }
+                const result = await response.json();
+
+                if (result.promptFeedback && result.promptFeedback.blockReason) {
+                    console.error("API blocked the prompt:", result.promptFeedback);
+                    throw new Error(`The prompt was blocked by the API. Reason: ${result.promptFeedback.blockReason}`);
+                }
+
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0 && result.candidates[0].content.parts[0].text) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    try {
+                        return schema ? JSON.parse(text) : text;
+                    } catch (e) {
+                        console.error("Failed to parse JSON from API response:", text);
+                        throw new Error("API returned malformed JSON.");
+                    }
+                } else {
+                    console.error("API response did not contain expected content:", result);
+                    throw new Error("No content generated by the API or response format is unexpected.");
+                }
+            }
+
+            function displayGeneratedFeature(data, velocity) {
+                const { ranges, assignedSize } = calculateSizing(velocity, data.storyPoints);
+                let sizingTableHTML = `<table class="sizing-table"><thead><tr><th>T-Shirt Size</th><th>Story Point Range</th></tr></thead><tbody>`;
+                Object.keys(ranges).forEach(key => {
+                    sizingTableHTML += `<tr class="${key === assignedSize ? 'highlight' : ''}"><td>${key}</td><td>${ranges[key].label}</td></tr>`;
+                });
+                sizingTableHTML += `</tbody></table>`;
+                if (assignedSize === 'XL') {
+                     sizingTableHTML += `<p class="mt-2 text-sm font-semibold text-red-600">Warning: This feature exceeds the 'L' size threshold. Consider breaking it into smaller, independently valuable features.</p>`;
+                }
+
+                const fieldOrder = [
+                    { key: 'summary', label: 'Summary' },
+                    { key: 'featureBenefitHypothesis', label: 'Feature / Benefit Hypothesis' },
+                    { key: 'businessValueStrategicAlignment', label: 'Business Value & Strategic Alignment' },
+                    { key: 'userImpact', label: 'User Impact' },
+                    { key: 'assumptionsDependencies', label: 'Assumptions & Dependencies' },
+                    { key: 'risksMitigations', label: 'Risks & Mitigations' },
+                    { key: 'nonFunctionalRequirements', label: 'Non-Functional Requirements (NFRs)' },
+                    { key: 'securityPrivacyConsiderations', label: 'Security & Privacy Considerations' },
+                    { key: 'sustainabilityMaintenance', label: 'Sustainability & Maintenance' },
+                    { key: 'implementationNotes', label: 'Implementation Notes' },
+                    { key: 'validationTestStrategy', label: 'Validation & Test Strategy' },
+                    { key: 'acceptanceCriteria', label: 'Acceptance Criteria' },
+                    { key: 'readinessChecklist', label: 'Readiness Checklist' }
+                ];
+
+                const fieldsHTML = fieldOrder.map(field => {
+                    if (!data[field.key]) return '';
+                    return `<div class="generated-field-container"><label class="generated-field-label">${field.label}</label><div class="generated-field-content">${data[field.key]}</div></div>`;
+                }).join('');
+
+                const contentHTML = `
+                    <div class="fade-in">
+                        <h2 class="text-2xl font-bold text-gray-900 break-words">${data.featureTitle || 'Generated SAFe Feature'}</h2>
+                        <p class="text-sm text-gray-500 mb-6">Created by: Copilot Product Manager | Date: ${new Date().toLocaleDateString()}</p>
+                        
+                        <div id="generated-content-container">
+                            ${fieldsHTML}
+                             <div class="generated-field-container"><label class="generated-field-label">Sizing & Estimation</label><div class="generated-field-content"><p class="mb-2"><strong>Team Velocity:</strong> ${velocity}</p><p class="mb-4"><strong>Copilot-Estimated Story Points:</strong> ${data.storyPoints}</p>${sizingTableHTML}</div></div>
+                        </div>
+
+                        <div id="story-generation-container" class="mt-8 text-center pt-6 border-t border-dashed">
+                              <button id="generate-stories-button" class="ai-generator-button bg-purple-600 hover:bg-purple-700">
+                                  <i data-lucide="list-plus" class="w-4 h-4 mr-2"></i>
+                                  <span>Generate Stories</span>
+                              </button>
+                        </div>
+                        <div id="story-results-container" class="mt-8"></div>
+                        <div id="test-case-generation-container" class="mt-8"></div>
+                        <div id="test-case-results-container" class="mt-8"></div>
+                    </div>
+                `;
+                templateContainer.innerHTML = contentHTML;
+                lucide.createIcons();
+                document.getElementById('generate-stories-button').addEventListener('click', renderDoRInput);
+
+                actionFooter.classList.remove('hidden');
+                copyButton.style.display = 'flex';
+                copyButtonText.textContent = 'Copy Feature Details';
+            }
+
+            function renderDoRInput() {
+                const container = document.getElementById('story-generation-container');
+                container.innerHTML = `
+                    <div class="p-4 border-t border-dashed text-left">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4">Decompose into User Stories</h3>
+                        <div class="mb-4">
+                            <label for="dor-input" class="block text-sm font-medium text-gray-700">Would you like to provide your team's Definition of Ready (DoR)? (Optional)</label>
+                            <p class="text-xs text-gray-500 mb-2">Providing your DoR helps Copilot align stories to your team's sprint-ready standards.</p>
+                            <textarea id="dor-input" rows="4" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="e.g., - Story is estimated\n- Acceptance criteria are defined\n- Dependencies are identified"></textarea>
+                        </div>
+                        <div id="dor-buttons" class="flex justify-end space-x-4">
+                             <button id="skip-dor-button" class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Skip & Use Standard Guidelines</button>
+                             <button id="proceed-dor-button" class="ai-generator-button">Proceed with DoR</button>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('proceed-dor-button').addEventListener('click', () => {
+                    const dor = document.getElementById('dor-input').value;
+                    handleStoryGeneration(dor);
+                });
+                document.getElementById('skip-dor-button').addEventListener('click', () => handleStoryGeneration(''));
+            }
+
+            async function handleStoryGeneration(dor) {
+                const dorContainer = document.getElementById('story-generation-container');
+                const storiesContainer = document.getElementById('story-results-container');
+                
+                if (!generatedFeatureData) {
+                    showToast('Cannot generate stories without feature data.', 'error');
+                    return;
+                }
+                
+                if(dorContainer) {
+                    dorContainer.innerHTML = `<div class="flex justify-center items-center p-4 border-t border-dashed"><span class="loader mr-4"></span><span>Generating Stories...</span></div>`;
+                }
+                storiesContainer.innerHTML = '';
+
+                const prompt = `
+                You are a seasoned Product Owner. Your role is to decompose the following high-level SAFe Feature into clear, testable, and valuable User Stories.
+                
+                Feature Details:
+                Title: ${generatedFeatureData.featureTitle}
+                Summary: ${generatedFeatureData.summary}
+                Acceptance Criteria: ${generatedFeatureData.acceptanceCriteria}
+
+                ${dor ? `The team's Definition of Ready is: "${dor}". Please ensure the generated stories align with these standards.` : 'Please use standard readiness guidelines.'}
+
+                For each User Story, provide:
+                1.  A concise 'title'.
+                2.  A 'description' in the format "As a [role], I want [action], so that [value]".
+                3.  'acceptanceCriteria' as a multi-line string.
+                4.  'storyPoints' as a number from a modified Fibonacci scale (1, 2, 3, 5, 8, 13).
+                `;
+
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        stories: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    title: { type: "STRING" },
+                                    description: { type: "STRING" },
+                                    acceptanceCriteria: { type: "STRING" },
+                                    storyPoints: { type: "NUMBER" }
+                                },
+                                required: ["title", "description", "acceptanceCriteria", "storyPoints"]
+                            }
+                        }
+                    },
+                    required: ["stories"]
+                };
+
+                try {
+                    const result = await callCopilot(prompt, schema);
+                    generatedStoriesData = result.stories; 
+                    if(dorContainer) dorContainer.innerHTML = ''; 
+                    
+                    if (generatedStoriesData && generatedStoriesData.length > 0) {
+                        const storiesHeader = document.createElement('div');
+                        storiesHeader.className = 'flex justify-between items-center mb-4 mt-8 border-t pt-6';
+                        storiesHeader.innerHTML = `
+                            <h3 class="text-xl font-bold text-gray-900">Generated User Stories</h3>
+                            <button id="copy-stories-button" class="flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-blue-700">
+                                <i data-lucide="copy" class="w-4 h-4 mr-2"></i>
+                                Copy Stories
+                            </button>
+                        `;
+                        storiesContainer.appendChild(storiesHeader);
+                        
+                        const copyStoriesButton = document.getElementById('copy-stories-button');
+                        if (copyStoriesButton) {
+                            copyStoriesButton.addEventListener('click', generateStoriesOutputText);
+                        }
+                        lucide.createIcons();
+
+                        generatedStoriesData.forEach(story => {
+                            const storyCard = document.createElement('div');
+                            storyCard.className = 'story-card';
+                            storyCard.innerHTML = `
+                                <h4 class="text-lg">${story.title} (${story.storyPoints} SP)</h4>
+                                <p class="mt-2">${story.description}</p>
+                                
+                                <h5 class="sub-section-title">Acceptance Criteria</h5>
+                                <p class="sub-section-content">${story.acceptanceCriteria.replace(/\n/g, '<br>')}</p>
+                            `;
+                            storiesContainer.appendChild(storyCard);
+                        });
+                        
+                        const testCaseContainer = document.getElementById('test-case-generation-container');
+                        testCaseContainer.innerHTML = `
+                            <div class="text-center pt-6 border-t border-dashed">
+                                 <button id="generate-test-cases-button" class="ai-generator-button bg-teal-600 hover:bg-teal-700">
+                                     <i data-lucide="beaker" class="w-4 h-4 mr-2"></i>
+                                     <span>Generate Test Cases</span>
+                                 </button>
+                            </div>
+                        `;
+                        lucide.createIcons();
+                        document.getElementById('generate-test-cases-button').addEventListener('click', handleTestCaseGeneration);
+
+                        showToast('User stories generated successfully!', 'success');
+                    } else {
+                        throw new Error("No stories were generated.");
+                    }
+                } catch (error) {
+                    console.error("Story Generation Error:", error);
+                    showToast("Failed to generate user stories.", "error");
+                    if (dorContainer) dorContainer.innerHTML = '';
+                    storiesContainer.innerHTML = `<p class="text-red-500">Could not generate stories at this time.</p>`;
+                }
+            }
+            
+            async function handleTestCaseGeneration() {
+                const buttonContainer = document.getElementById('test-case-generation-container');
+                const resultsContainer = document.getElementById('test-case-results-container');
+                
+                if (!generatedFeatureData || !generatedStoriesData) {
+                    showToast('Feature and Story data are required to generate test cases.', 'error');
+                    return;
+                }
+
+                buttonContainer.innerHTML = `<div class="flex justify-center items-center p-4 border-t border-dashed"><span class="loader mr-4"></span><span>Generating Test Cases... This can take a moment.</span></div>`;
+                resultsContainer.innerHTML = '';
+
+                const storiesSummary = generatedStoriesData.map(s => `Story Title: ${s.title}\nStory Description: ${s.description}\nAcceptance Criteria: ${s.acceptanceCriteria}`).join('\n\n');
+
+                const prompt = `
+                You are a meticulous QA Engineer. Your task is to generate a comprehensive suite of test cases for the following SAFe Feature and its decomposed User Stories.
+                Your goal is to ensure complete test coverage, including positive "happy path" scenarios, negative scenarios, and edge cases.
+
+                FEATURE DETAILS:
+                Title: ${generatedFeatureData.featureTitle}
+                Summary: ${generatedFeatureData.summary}
+                Acceptance Criteria: ${generatedFeatureData.acceptanceCriteria}
+
+                USER STORIES:
+                ${storiesSummary}
+
+                Please generate a list of test cases. For each test case, provide:
+                1. 'testCaseId': A unique identifier string (e.g., "TC-001").
+                2. 'title': A brief, descriptive title for the test case.
+                3. 'steps': A multi-line string detailing the steps to execute the test.
+                4. 'expectedResults': A multi-line string describing the expected outcome after executing the steps.
+                5. 'type': The type of test case, which must be either "Positive" or "Negative".
+                `;
+
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        testCases: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    testCaseId: { type: "STRING" },
+                                    title: { type: "STRING" },
+                                    steps: { type: "STRING" },
+                                    expectedResults: { type: "STRING" },
+                                    type: { type: "STRING", enum: ["Positive", "Negative"] }
+                                },
+                                required: ["testCaseId", "title", "steps", "expectedResults", "type"]
+                            }
+                        }
+                    },
+                    required: ["testCases"]
+                };
+
+                try {
+                    const result = await callCopilot(prompt, schema);
+                    generatedTestCasesData = result.testCases;
+                    buttonContainer.innerHTML = ''; // Clear the loading indicator
+                    displayTestCases(generatedTestCasesData);
+                    showToast('Test cases generated successfully!', 'success');
+                } catch (error) {
+                    console.error("Test Case Generation Error:", error);
+                    showToast("Failed to generate test cases.", "error");
+                    buttonContainer.innerHTML = '';
+                    resultsContainer.innerHTML = `<p class="text-red-500 text-center">Could not generate test cases at this time.</p>`;
+                }
+            }
+
+            function displayTestCases(testCases) {
+                const resultsContainer = document.getElementById('test-case-results-container');
+                resultsContainer.innerHTML = '';
+
+                if (!testCases || testCases.length === 0) {
+                    resultsContainer.innerHTML = `<p class="text-gray-500 text-center">No test cases were generated.</p>`;
+                    return;
+                }
+
+                const header = document.createElement('div');
+                header.className = 'flex justify-between items-center mb-4 mt-8 border-t pt-6';
+                header.innerHTML = `
+                    <h3 class="text-xl font-bold text-gray-900">Generated Test Cases</h3>
+                    <button id="copy-test-cases-button" class="flex items-center px-3 py-1.5 bg-teal-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-teal-700">
+                        <i data-lucide="copy" class="w-4 h-4 mr-2"></i>
+                        Copy Test Cases
+                    </button>
+                `;
+                resultsContainer.appendChild(header);
+                lucide.createIcons();
+                document.getElementById('copy-test-cases-button').addEventListener('click', generateTestCasesOutputText);
+
+                testCases.forEach(tc => {
+                    const card = document.createElement('div');
+                    card.className = 'test-case-card';
+                    const typeClass = tc.type === 'Positive' ? 'test-case-type-positive' : 'test-case-type-negative';
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                             <h4 class="text-lg mb-2">${tc.testCaseId}: ${tc.title}</h4>
+                             <span class="test-case-type ${typeClass}">${tc.type}</span>
+                        </div>
+                        <h5 class="sub-section-title">Steps</h5>
+                        <div class="sub-section-content">${tc.steps.replace(/\n/g, '<br>')}</div>
+                        <h5 class="sub-section-title">Expected Results</h5>
+                        <div class="sub-section-content">${tc.expectedResults.replace(/\n/g, '<br>')}</div>
+                    `;
+                    resultsContainer.appendChild(card);
+                });
+            }
+
+            function calculateSizing(velocity, storyPoints) {
+                const V = velocity;
+                const N = 5.5;
+                const round = num => (num <= 10 ? Math.ceil(num / 5) * 5 : Math.ceil(num / 10) * 10);
+                const ranges = {
+                    'XS': { min: 0, max: round(0.5 * V), label: `0 to ${round(0.5 * V)}` },
+                    'S': { min: round(0.5 * V), max: round(1 * V), label: `> ${round(0.5 * V)} to ${round(1 * V)}` },
+                    'M': { min: round(1 * V), max: round(2 * V), label: `> ${round(1 * V)} to ${round(2 * V)}` },
+                    'L': { min: round(2 * V), max: round(N * V), label: `> ${round(2 * V)} to ${round(N * V)}` },
+                    'XL': { min: round(N * V), max: Infinity, label: `> ${round(N * V)}` }
+                };
+                let assignedSize = 'XL';
+                if (storyPoints <= ranges.XS.max) assignedSize = 'XS';
+                else if (storyPoints <= ranges.S.max) assignedSize = 'S';
+                else if (storyPoints <= ranges.M.max) assignedSize = 'M';
+                else if (storyPoints <= ranges.L.max) assignedSize = 'L';
+                return { ranges, assignedSize };
+            }
+
+            function generateFeatureOutputText() {
+                if (!generatedFeatureData) return 'No feature has been generated yet.';
+                const data = generatedFeatureData;
+                const velocityText = document.querySelector('.generated-field-content p strong')?.parentElement?.textContent;
+                const velocity = velocityText ? parseInt(velocityText.split(': ')[1]) : 20;
+                const { ranges, assignedSize } = calculateSizing(velocity, data.storyPoints);
+                
+                let sizingText = `SIZING & ESTIMATION\nTeam Velocity: ${velocity}\nCopilot-Estimated Story Points: ${data.storyPoints}\nAssigned Size: ${assignedSize}\n\n`;
+                sizingText += 'T-Shirt Size | Story Point Range\n---------------------------------\n';
+                Object.keys(ranges).forEach(key => { sizingText += `${key.padEnd(12)} | ${ranges[key].label}\n`; });
+
+                const fieldOrder = [ 'summary', 'featureBenefitHypothesis', 'businessValueStrategicAlignment', 'userImpact', 'assumptionsDependencies', 'risksMitigations', 'nonFunctionalRequirements', 'securityPrivacyConsiderations', 'sustainabilityMaintenance', 'implementationNotes', 'validationTestStrategy', 'acceptanceCriteria', 'readinessChecklist' ];
+                
+                const sections = fieldOrder.map(key => {
+                    if (!data[key]) return null;
+                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    return { label, content: data[key] };
+                }).filter(Boolean);
+
+                sections.push({ label: 'Sizing & Estimation', content: sizingText });
+
+                return sections.map(sec => `** ${sec.label.toUpperCase()} **\n${sec.content}\n\n`).join('');
+            }
+
+            function generateStoriesOutputText() {
+                if (!generatedStoriesData || generatedStoriesData.length === 0) {
+                    showToast('No stories to copy.', 'error');
+                    return;
+                }
+                
+                let output = "GENERATED USER STORIES\n========================================\n\n";
+                generatedStoriesData.forEach(story => {
+                    output += `** TITLE: ${story.title} (${story.storyPoints} SP) **\n\n`;
+                    output += `** USER STORY **\n${story.description}\n\n`;
+                    output += `** ACCEPTANCE CRITERIA **\n${story.acceptanceCriteria}\n\n`;
+                    output += `----------------------------------------\n\n`;
+                });
+
+                navigator.clipboard.writeText(output).then(() => showToast('Stories copied to clipboard!')).catch(() => showToast('Failed to copy stories.', 'error'));
+            }
+
+            function generateTestCasesOutputText() {
+                if (!generatedTestCasesData || generatedTestCasesData.length === 0) {
+                    showToast('No test cases to copy.', 'error');
+                    return;
+                }
+
+                let output = "GENERATED TEST CASES\n========================================\n\n";
+                generatedTestCasesData.forEach(tc => {
+                    output += `** ID: ${tc.testCaseId} **\n`;
+                    output += `** TITLE: ${tc.title} **\n`;
+                    output += `** TYPE: ${tc.type} **\n\n`;
+                    output += `STEPS:\n${tc.steps}\n\n`;
+                    output += `EXPECTED RESULTS:\n${tc.expectedResults}\n\n`;
+                    output += `----------------------------------------\n\n`;
+                });
+
+                navigator.clipboard.writeText(output).then(() => showToast('Test cases copied to clipboard!')).catch(() => showToast('Failed to copy test cases.', 'error'));
+            }
+
+
+            function generateGenericOutputText() {
+                const template = templates[currentActiveTemplate];
+                if (!template) return '';
+                let output = `WORK ITEM: ${template.title.toUpperCase()}\n========================================\n\n`;
+                template.fields.slice(1).forEach(field => {
+                    let value;
+                    if (field.type === 'ace' && aceEditor) {
+                        value = aceEditor.getValue();
+                    } else {
+                        const input = document.getElementById(field.id);
+                        if (input) value = input.value;
+                    }
+                    output += `** ${field.label} **\n${value || '(Not provided)'}\n\n`;
+                });
+                return output;
+            }
+
+            function showToast(message, type = 'success') {
+                toastMessage.textContent = message;
+                toastNotification.className = 'toast fixed bottom-10 right-10 px-6 py-3 rounded-lg shadow-lg z-50';
+                toastNotification.classList.add(type === 'error' ? 'bg-red-600' : 'bg-gray-900', 'text-white', 'show');
+                setTimeout(() => toastNotification.classList.remove('show'), 3000);
+            }
+
+            copyButton.addEventListener('click', () => {
+                const textToCopy = (currentActiveTemplate === 'SAFe Feature') ? generateFeatureOutputText() : generateGenericOutputText();
+                navigator.clipboard.writeText(textToCopy).then(() => showToast('Output copied to clipboard!')).catch(() => showToast('Failed to copy.', 'error'));
+            });
+
+            resetButton.addEventListener('click', () => {
+                if (currentActiveTemplate) {
+                    renderTemplate(currentActiveTemplate);
+                    showToast('Form has been reset.');
+                }
+            });
+
+            initApp();
+        });
+    </script>
+</body>
+</html>
