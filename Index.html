@@ -616,7 +616,7 @@
                     payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
                 }
                 
-                const apiKey = "AIzaSyC-ZcBjJWD1Vw7PDS6T8QzQGp2RJlmL2aM"; // API key is handled by the environment
+                const apiKey = ""; // API key is handled by the environment
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 
                 const response = await fetch(apiUrl, {
